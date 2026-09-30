@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#030508] select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080, height=1920, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Beat The Clock 10.000s - GoBe Robot Kiosk</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,700;1,700&family=Orbitron:wght@700;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --neon-cyan: #00f3ff;
+      --neon-amber: #ffb800;
+      --neon-crimson: #ff2a5f;
+    }
+
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #030508;
+    }
+
+    /* 1080x1920 Kiosk Canvas with responsive fit */
+    #kioskRoot {
+      width: 1080px;
+      height: 1920px;
+      min-width: 1080px;
+      min-height: 1920px;
+      position: relative;
+      background: radial-gradient(circle at 50% 32%, #11172a 0%, #060810 65%, #020306 100%);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transform-origin: center center;
+    }
+
+    .font-digital {
+      font-family: 'Orbitron', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .font-tech {
+      font-family: 'Chakra Petch', sans-serif;
+    }
+
+    /* Ambient scanline texture */
+    .scanlines::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%),
+                  linear-gradient(90deg, rgba(0, 243, 255, 0.02), rgba(0, 0, 0, 0.01), rgba(255, 42, 95, 0.02));
+      background-size: 100% 4px, 6px 100%;
+      pointer-events: none;
+      z-index: 35;
+    }
+
+    /* 3D Tactile Slam Button with realistic depression */
+    .slam-btn {
+      position: relative;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ff4b72, #d60037 60%, #800020 100%);
+      box-shadow: 
+        0 20px 45px rgba(0, 0, 0, 0.85),
+        0 0 50px rgba(255, 42, 95, 0.45),
+        inset 0 -12px 18px rgba(0, 0, 0, 0.65),
+        inset 0 12px 18px rgba(255, 255, 255, 0.35);
+      transition: transform 0.06s cubic-bezier(0, 0, 0.2, 1), box-shadow 0.06s ease;
+    }
+
+    .slam-btn:active, .slam-btn.slam-depressed {
+      transform: translateY(12px) scale(0.97);
+      box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.95),
+        0 0 35px rgba(255, 42, 95, 0.8),
+        inset 0 -6px 10px rgba(0, 0, 0, 0.85),
+        inset 0 6px 12px rgba(255, 255, 255, 0.25);
+    }
+
+    .slam-btn-bezel {
+      border-radius: 50%;
+      background: linear-gradient(145deg, #2b3044, #0f121d);
+      box-shadow: 
+        0 25px 60px rgba(0, 0, 0, 0.95),
+        inset 0 4px 6px rgba(255, 255, 255, 0.15),
+        inset 0 -8px 14px rgba(0, 0, 0, 0.85);
+    }
+
+    /* Screen shake impact */
+    .screen-shake {
+      animation: shakeImpact 0.32s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    @keyframes shakeImpact {
+      10%, 90% { transform: translate3d(-3px, 1px, 0); }
+      20%, 80% { transform: translate3d(5px, -2px, 0); }
+      30%, 50%, 70% { transform: translate3d(-6px, 2px, 0); }
+      40%, 60% { transform: translate3d(6px, -1px, 0); }
+    }
+
+    @keyframes auraPulse {
+      0%, 100% { transform: scale(1); opacity: 0.6; }
+      50% { transform: scale(1.08); opacity: 0.9; }
+    }
+
+    .aura-pulse-anim {
+      animation: auraPulse 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="kioskRoot" class="scanlines p-14">
+    
+    <!-- ================= 1. TOP STATUS HEADER ================= -->
+    <header class="w-full flex justify-between items-center z-10 pt-2">
+      <!-- Player Profile Card -->
+      <div class="flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl px-7 py-4 rounded-3xl border-2 border-cyan-500/30 shadow-2xl">
+        <div class="w-4 h-4 rounded-full bg-cyan-400 animate-pulse"></div>
+        <div class="text-left">
+          <div class="text-[11px] font-tech font-bold tracking-[0.2em] text-cyan-400 uppercase">CHALLENGER</div>
+          <div id="hudPlayerLabel" class="text-2xl font-tech font-black text-white truncate max-w-[240px]">
+            CHALLENGER 1
+          </div>
+        </div>
+        <button id="btnSwitchChallenger" class="ml-3 bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 text-cyan-300 font-tech font-bold text-xs px-4 py-2.5 rounded-xl border border-cyan-400/40 transition-all uppercase tracking-wider">
+          SWITCH
+        </button>
+      </div>
+
+      <!-- Header Controls: Blindout Toggle + Mute + Streak -->
+      <div class="flex items-center gap-4">
+        <!-- Blindout Mode Toggle -->
+        <button id="btnToggleBlindout" class="flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl px-5 py-4 rounded-3xl border-2 border-slate-700 hover:border-cyan-400/50 active:scale-95 transition-all shadow-2xl">
+          <div id="blindoutIndicator" class="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse"></div>
+          <div class="text-left">
+            <div class="text-[10px] font-tech font-bold tracking-widest text-slate-400 uppercase">BLINDOUT MODE</div>
+            <div id="blindoutModeText" class="text-sm font-tech font-extrabold text-rose-400 uppercase tracking-wider">
+              HIDE AT 5.0s
+            </div>
+          </div>
+        </button>
+
+        <!-- Audio Sound Toggle -->
+        <button id="btnToggleSound" class="w-16 h-16 rounded-3xl bg-slate-900/90 border-2 border-slate-700 flex items-center justify-center text-2xl hover:border-cyan-400/50 active:scale-95 transition-all shadow-xl">
+          <span id="soundIcon">🔊</span>
+        </button>
+
+        <!-- Streak Badge -->
+        <div class="flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl px-6 py-3.5 rounded-3xl border-2 border-amber-500/40 shadow-2xl">
+          <div class="text-right">
+            <div class="text-[10px] font-tech font-bold tracking-widest text-amber-400 uppercase">STREAK</div>
+            <div id="streakDisplay" class="text-3xl font-digital font-black text-amber-400 leading-none">00</div>
+          </div>
+          <span class="text-3xl">🔥</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================= 2. MAIN CIRCULAR DIAL HUD ================= -->
+    <main class="w-full flex flex-col items-center justify-center flex-grow z-10 -mt-2">
+      
+      <!-- Target & Rule Headline -->
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 font-tech font-bold text-sm uppercase tracking-[0.25em] mb-2 shadow-lg shadow-cyan-500/10">
+          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+          OFFICIAL ROBOT TIMING PROTOCOL
+        </div>
+        <h1 class="text-6xl font-black font-tech uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-slate-400 drop-shadow-[0_4px_20px_rgba(0,243,255,0.4)]">
+          BEAT THE CLOCK
+        </h1>
+        <p class="text-lg font-tech text-slate-400 tracking-wider mt-1">
+          HIT THE SENSOR AT EXACTLY <span class="text-cyan-400 font-bold">10.000 SECONDS</span>
+        </p>
+      </div>
+
+      <!-- CIRCULAR GAUGE DIAL WRAPPER (520x520) -->
+      <div class="relative w-[520px] h-[520px] flex items-center justify-center">
+        
+        <!-- Ambient Radial Glow Backdrop -->
+        <div id="dialGlow" class="absolute -inset-10 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none transition-all duration-300"></div>
+
+        <!-- SVG Circular Progress Ring -->
+        <svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none drop-shadow-[0_0_25px_rgba(0,243,255,0.25)]" viewBox="0 0 520 520">
+          <!-- Outer Decorative Tick Track -->
+          <circle cx="260" cy="260" r="252" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2" stroke-dasharray="4 12" />
+          
+          <!-- Base Track -->
+          <circle cx="260" cy="260" r="240" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="16" />
+          
+          <!-- Live Dynamic Progress Ring (Circumference = 2 * PI * 240 = 1507.96) -->
+          <circle 
+            id="dialProgressRing" 
+            cx="260" 
+            cy="260" 
+            r="240" 
+            fill="none" 
+            stroke="#00f3ff" 
+            stroke-width="16" 
+            stroke-linecap="round"
+            stroke-dasharray="1507.96" 
+            stroke-dashoffset="1507.96" 
+            class="transition-[stroke-dashoffset] duration-75"
+          />
+        </svg>
+
+        <!-- Inner Core Circular Chassis -->
+        <div class="relative w-[440px] h-[440px] rounded-full bg-slate-950/95 border-2 border-slate-800 flex flex-col items-center justify-center p-6 backdrop-blur-2xl shadow-inner overflow-hidden">
+          
+          <!-- Sensory Blindout Glitch Screen Overlay -->
+          <div id="blindoutGlitchScreen" class="absolute inset-0 bg-[#060810]/98 flex flex-col items-center justify-center p-8 opacity-0 pointer-events-none transition-opacity duration-150 z-20">
+            <div class="text-7xl font-digital text-rose-500 font-black tracking-widest animate-pulse">??:??.???</div>
+            <div class="text-sm font-tech font-bold text-rose-400 tracking-[0.2em] uppercase text-center mt-3">
+              ⚡ SENSORY BLIND ACTIVE ⚡<br>RELY ON YOUR INTERNAL TEMPO!
+            </div>
+          </div>
+
+          <!-- Target Sub-Label -->
+          <div class="text-xs font-tech font-bold tracking-[0.3em] uppercase text-slate-400 mb-2 z-10 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            TARGET: 10.000s
+          </div>
+
+          <!-- Main High-Contrast LED Digits -->
+          <div id="timerDigits" class="text-[92px] font-digital font-black tracking-tight text-cyan-400 drop-shadow-[0_0_35px_rgba(0,243,255,0.8)] z-10 leading-none">
+            00.000
+          </div>
+
+          <!-- Feedback Evaluation Badge -->
+          <div id="ratingBadge" class="mt-4 px-6 py-2 rounded-full font-tech font-black text-xl tracking-widest uppercase opacity-0 transform translate-y-3 transition-all duration-300 z-10">
+            READY
+          </div>
+
+          <!-- Millisecond Deviation Delta -->
+          <div id="deltaReadout" class="text-lg font-digital text-slate-400 mt-1 z-10 opacity-0 transition-opacity">
+            OFFSET: ±0.000s
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 3. MASSIVE 3D ARCADE SLAM BUTTON ================= -->
+      <div class="mt-8 flex flex-col items-center relative">
+        <div class="relative w-[340px] h-[340px] flex items-center justify-center">
+          <!-- Expanding aura halo -->
+          <div id="btnHalo" class="absolute -inset-4 rounded-full bg-rose-500/20 blur-2xl aura-pulse-anim pointer-events-none transition-all duration-300"></div>
+          
+          <!-- Outer bezel ring -->
+          <div class="slam-btn-bezel w-full h-full p-5 flex items-center justify-center">
+            <!-- Slam Button -->
+            <button id="slamButton" class="slam-btn w-full h-full flex flex-col items-center justify-center select-none cursor-pointer">
+              <span id="slamBtnText" class="text-5xl font-tech font-black tracking-wider text-white uppercase drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]">START</span>
+              <span id="slamBtnSub" class="text-xs font-tech font-bold text-white/80 tracking-widest mt-1 uppercase">TOUCH TO SLAM</span>
+            </button>
+          </div>
+        </div>
+        <div class="mt-4 text-xs font-tech text-slate-500 tracking-[0.25em] uppercase">
+          CAPACITIVE ROBOT SENSOR • INSTANT TRIGGER
+        </div>
+      </div>
+    </main>
+
+    <!-- ================= 4. LOCAL HALL OF FAME FOOTER ================= -->
+    <footer class="w-full z-10 pb-2">
+      <div class="w-full bg-slate-900/80 backdrop-blur-xl rounded-3xl border-2 border-slate-800 p-6 shadow-2xl">
+        <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🏆</span>
+            <div>
+              <h2 class="text-lg font-tech font-bold tracking-wider uppercase text-slate-200">GoBe Hall of Fame</h2>
+              <p class="text-[11px] font-tech text-slate-500 uppercase tracking-widest">Top 5 Precision Attempts</p>
+            </div>
+          </div>
+          <button id="btnClearLeaderboard" class="text-[11px] font-tech text-slate-500 hover:text-rose-400 uppercase tracking-wider px-3 py-1.5 rounded-lg border border-slate-800 hover:border-rose-500/30 transition-all">
+            RESET LOGS
+          </button>
+        </div>
+
+        <div id="leaderboardList" class="space-y-2.5">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </footer>
+
+    <!-- ================= 5. ON-SCREEN TOUCH REGISTRATION MODAL ================= -->
+    <div id="playerModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl flex items-center justify-center z-50 p-8 hidden">
+      <div class="w-[820px] bg-slate-900 border-2 border-cyan-500/50 rounded-3xl p-10 flex flex-col items-center shadow-[0_0_80px_rgba(0,243,255,0.25)]">
+        
+        <div class="w-20 h-20 rounded-3xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-4xl mb-4 shadow-lg shadow-cyan-500/20">
+          🤖
+        </div>
+
+        <h3 class="text-4xl font-black font-tech uppercase text-white tracking-wide">CHALLENGER REGISTRATION</h3>
+        <p class="text-slate-400 text-lg mt-1 text-center font-tech">Enter your name for the official Robot Leaderboard</p>
+
+        <!-- Name Display Input Box -->
+        <div class="w-full mt-6">
+          <input 
+            id="inputPlayerName" 
+            type="text" 
+            maxlength="12" 
+            placeholder="PLAYER NAME" 
+            autocomplete="off"
+            class="w-full bg-slate-950 border-2 border-cyan-500/60 rounded-2xl px-6 py-5 text-4xl font-digital text-center text-cyan-300 uppercase tracking-widest focus:outline-none focus:border-cyan-300 shadow-inner"
+          />
+        </div>
+
+        <!-- On-Screen Virtual Touch Keyboard -->
+        <div class="grid grid-cols-6 gap-3 w-full mt-6">
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">A</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">B</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">C</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">D</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">E</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">F</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">G</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">H</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">I</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">J</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">K</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">L</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">M</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">N</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">O</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">P</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">R</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">S</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">T</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">U</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">V</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">W</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">X</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">Z</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">1</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">2</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">3</button>
+          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">4</button>
+          <button id="btnVirtualBackspace" class="col-span-2 bg-rose-950/70 hover:bg-rose-900 border border-rose-600/40 text-rose-300 py-3.5 rounded-2xl font-tech font-bold text-xl active:scale-95 transition-all">
+            ⌫ BACK
+          </button>
+        </div>
+
+        <!-- Confirm and Play Button -->
+        <button id="btnConfirmPlayer" class="w-full mt-8 bg-gradient-to-r from-cyan-400 via-cyan-500 to-blue-600 hover:brightness-110 text-slate-950 font-black font-tech text-3xl py-6 rounded-3xl uppercase tracking-widest shadow-xl shadow-cyan-500/30 active:scale-98 transition-all">
+          LOCK IN CHALLENGER ➔
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* ----------------------------------------------------
+       WEB AUDIO SYNTHESIZER (In-Memory Sound Generation)
+    ---------------------------------------------------- */
+    class WebAudioSynth {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playClick(freq = 900) {
+        if (this.muted) return;
+        this.init();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.04);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.04);
+        } catch (e) {}
+      }
+
+      playTick() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(650, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.07, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.05);
+        } catch (e) {}
+      }
+
+      playGlitch() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const bufferSize = this.ctx.sampleRate * 0.18;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.value = 1200;
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          noise.start();
+        } catch (e) {}
+      }
+
+      playSlam() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(28, this.ctx.currentTime + 0.28);
+          gain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.28);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.28);
+        } catch (e) {}
+      }
+
+      playSuspenseRiser() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(660, this.ctx.currentTime + 0.65);
+          gain.gain.setValueAtTime(0.01, this.ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.12, this.ctx.currentTime + 0.60);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.65);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.65);
+        } catch (e) {}
+      }
+
+      playVictoryChord() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const freqs = [523.25, 659.25, 783.99, 1046.50];
+          freqs.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.12, this.ctx.currentTime + idx * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + idx * 0.08 + 0.45);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(this.ctx.currentTime + idx * 0.08);
+            osc.stop(this.ctx.currentTime + idx * 0.08 + 0.45);
+          });
+        } catch (e) {}
+      }
+
+      playBuzzer() {
+        if (this.muted) return;
+        this.init();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+          osc.frequency.setValueAtTime(95, this.ctx.currentTime + 0.16);
+          gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.45);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.45);
+        } catch (e) {}
+      }
+    }
+
+    const synth = new WebAudioSynth();
+
+    /* ----------------------------------------------------
+       GAME CONTROLLER & KIOSK LOGIC
+    ---------------------------------------------------- */
+    const CIRCUMFERENCE = 1507.96; // 2 * PI * 240
+    let gameState = 'IDLE'; // 'IDLE' | 'RUNNING' | 'FREEZE' | 'REVEAL'
+    let isBlindoutEnabled = true;
+    let streak = 0;
+    let startTime = 0;
+    let stopTime = 0;
+    let animFrame = null;
+    let lastSecondEmitted = 0;
+    let currentPlayer = 'CHALLENGER 1';
+    try {
+      const savedPlayer = localStorage.getItem('currentPlayer');
+      if (savedPlayer) currentPlayer = savedPlayer;
+    } catch(e) {}
+
+    // DOM Elements
+    const hudPlayerLabel = document.getElementById('hudPlayerLabel');
+    const streakDisplay = document.getElementById('streakDisplay');
+    const btnSwitchChallenger = document.getElementById('btnSwitchChallenger');
+    const btnToggleBlindout = document.getElementById('btnToggleBlindout');
+    const blindoutIndicator = document.getElementById('blindoutIndicator');
+    const blindoutModeText = document.getElementById('blindoutModeText');
+    const btnToggleSound = document.getElementById('btnToggleSound');
+    const soundIcon = document.getElementById('soundIcon');
+
+    const dialGlow = document.getElementById('dialGlow');
+    const dialProgressRing = document.getElementById('dialProgressRing');
+    const blindoutGlitchScreen = document.getElementById('blindoutGlitchScreen');
+    const timerDigits = document.getElementById('timerDigits');
+    const ratingBadge = document.getElementById('ratingBadge');
+    const deltaReadout = document.getElementById('deltaReadout');
+
+    const slamButton = document.getElementById('slamButton');
+    const btnHalo = document.getElementById('btnHalo');
+    const slamBtnText = document.getElementById('slamBtnText');
+    const slamBtnSub = document.getElementById('slamBtnSub');
+
+    const leaderboardList = document.getElementById('leaderboardList');
+    const btnClearLeaderboard = document.getElementById('btnClearLeaderboard');
+
+    // Registration Modal Elements
+    const playerModal = document.getElementById('playerModal');
+    const inputPlayerName = document.getElementById('inputPlayerName');
+    const btnConfirmPlayer = document.getElementById('btnConfirmPlayer');
+    const btnVirtualBackspace = document.getElementById('btnVirtualBackspace');
+
+    // Leaderboard Data Cache
+    const DEFAULT_LEADERBOARD = [
+      { name: 'VALKYRIE', time: '10.002', diff: 0.002, date: 'TODAY' },
+      { name: 'KAIZEN', time: '09.989', diff: 0.011, date: 'TODAY' },
+      { name: 'PHANTOM', time: '10.024', diff: 0.024, date: 'TODAY' },
+      { name: 'CYBER-X', time: '09.965', diff: 0.035, date: 'YESTERDAY' },
+      { name: 'NOVA', time: '10.052', diff: 0.052, date: 'YESTERDAY' }
+    ];
+    let leaderboard = DEFAULT_LEADERBOARD;
+    try {
+      const stored = localStorage.getItem('leaderboard');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) leaderboard = parsed;
+      }
+    } catch(e) {}
+
+    function applyKioskScaling() {
+      const root = document.getElementById('kioskRoot');
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      
+      const scaleX = windowWidth / 1080;
+      const scaleY = windowHeight / 1920;
+      const scale = Math.min(scaleX, scaleY, 1);
+      
+      root.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', applyKioskScaling);
+    applyKioskScaling();
+
+    function formatTime(seconds) {
+      const s = Math.floor(seconds);
+      const ms = Math.floor((seconds % 1) * 1000);
+      return `${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+    }
+
+    function loop(now) {
+      if (gameState !== 'RUNNING') return;
+
+      const elapsed = (now - startTime) / 1000;
+
+      // Update Circular Progress Stroke
+      const progressRatio = Math.min(elapsed / 10.0, 1.0);
+      const dashOffset = CIRCUMFERENCE - (CIRCUMFERENCE * progressRatio);
+      dialProgressRing.style.strokeDashoffset = dashOffset;
+
+      // Dynamic color shift along the countdown arc
+      if (elapsed > 8.0) {
+        dialProgressRing.style.stroke = '#ff2a5f';
+        dialGlow.style.backgroundColor = 'rgba(255, 42, 95, 0.2)';
+      } else if (elapsed > 5.0) {
+        dialProgressRing.style.stroke = '#ffb800';
+        dialGlow.style.backgroundColor = 'rgba(255, 184, 0, 0.2)';
+      } else {
+        dialProgressRing.style.stroke = '#00f3ff';
+        dialGlow.style.backgroundColor = 'rgba(0, 243, 255, 0.15)';
+      }
+
+      // Audio tick every whole second under 5s
+      const wholeSec = Math.floor(elapsed);
+      if (wholeSec !== lastSecondEmitted && wholeSec > 0 && wholeSec < 5) {
+        synth.playTick();
+        lastSecondEmitted = wholeSec;
+      }
+
+      // Blindout at 5.000s if enabled
+      if (isBlindoutEnabled && elapsed >= 5.0 && blindoutGlitchScreen.style.opacity !== '1') {
+        blindoutGlitchScreen.style.opacity = '1';
+        synth.playGlitch();
+      }
+
+      // Digital Numbers Rendering
+      if (!isBlindoutEnabled || elapsed < 5.0) {
+        timerDigits.textContent = formatTime(elapsed);
+      }
+
+      // Auto Fail Cutoff after 14.5 seconds
+      if (elapsed >= 14.5) {
+        triggerSlamStop();
+        return;
+      }
+
+      animFrame = requestAnimationFrame(loop);
+    }
+
+    function startRun() {
+      synth.init();
+      gameState = 'RUNNING';
+      startTime = performance.now();
+      lastSecondEmitted = 0;
+
+      // Reset Visual HUD
+      blindoutGlitchScreen.style.opacity = '0';
+      ratingBadge.style.opacity = '0';
+      ratingBadge.classList.add('translate-y-3');
+      deltaReadout.style.opacity = '0';
+      timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-cyan-400 drop-shadow-[0_0_35px_rgba(0,243,255,0.8)] z-10 leading-none';
+      
+      dialProgressRing.style.stroke = '#00f3ff';
+      dialProgressRing.style.strokeDashoffset = CIRCUMFERENCE;
+
+      // Update Slam Button
+      slamBtnText.textContent = 'STOP!';
+      slamBtnSub.textContent = 'SLAM TO FREEZE';
+      btnHalo.classList.remove('aura-pulse-anim');
+      btnHalo.style.opacity = '1';
+
+      animFrame = requestAnimationFrame(loop);
+    }
+
+    function triggerSlamStop() {
+      if (gameState !== 'RUNNING') return;
+      gameState = 'FREEZE';
+      stopTime = performance.now();
+      cancelAnimationFrame(animFrame);
+
+      synth.playSlam();
+      synth.playSuspenseRiser();
+
+      // Tactile visual feedback
+      document.body.classList.add('screen-shake');
+      setTimeout(() => document.body.classList.remove('screen-shake'), 320);
+
+      slamButton.classList.add('slam-depressed');
+      setTimeout(() => slamButton.classList.remove('slam-depressed'), 140);
+
+      // SUSPENSE PHASE (Drum-roll reveal)
+      timerDigits.textContent = '??.???';
+      slamBtnText.textContent = 'HOLD...';
+      slamBtnSub.textContent = 'ANALYZING';
+
+      setTimeout(evaluateResult, 650);
+    }
+
+    function evaluateResult() {
+      gameState = 'REVEAL';
+      const elapsed = (stopTime - startTime) / 1000;
+      const rawDelta = elapsed - 10.000;
+      const absDelta = Math.abs(rawDelta);
+      const formattedElapsed = formatTime(elapsed);
+
+      blindoutGlitchScreen.style.opacity = '0';
+      timerDigits.textContent = formattedElapsed;
+
+      deltaReadout.textContent = `OFFSET: ${rawDelta >= 0 ? '+' : ''}${rawDelta.toFixed(3)}s`;
+      deltaReadout.style.opacity = '1';
+
+      // Precision Tier Classification
+      if (absDelta < 0.001) {
+        // EXACT 10.000s - GOD TIER
+        ratingBadge.textContent = '⚡ GOD TIER: EXACT 10.000s! ⚡';
+        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-black text-2xl tracking-widest uppercase bg-amber-400 text-slate-950 shadow-[0_0_50px_rgba(255,184,0,0.9)] opacity-100 transform translate-y-0 z-10';
+        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-amber-300 drop-shadow-[0_0_60px_rgba(255,184,0,1)] z-10 leading-none';
+        streak++;
+        synth.playVictoryChord();
+        blastConfetti();
+      } else if (absDelta <= 0.050) {
+        // SNIPER
+        ratingBadge.textContent = '🎯 SNIPER PRECISION!';
+        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-black text-2xl tracking-widest uppercase bg-cyan-400 text-slate-950 shadow-[0_0_35px_rgba(0,243,255,0.8)] opacity-100 transform translate-y-0 z-10';
+        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-cyan-200 drop-shadow-[0_0_40px_rgba(0,243,255,0.8)] z-10 leading-none';
+        streak++;
+        synth.playVictoryChord();
+      } else if (absDelta <= 0.200) {
+        // CLOSE CALL
+        ratingBadge.textContent = '⚡ CLOSE CALL!';
+        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-bold text-xl tracking-widest uppercase bg-amber-500/20 border-2 border-amber-400 text-amber-300 opacity-100 transform translate-y-0 z-10';
+        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-amber-400 drop-shadow-[0_0_30px_rgba(255,184,0,0.6)] z-10 leading-none';
+        streak = 0;
+        synth.playClick(440);
+      } else {
+        // BUST
+        ratingBadge.textContent = '💀 BUST! TRY AGAIN';
+        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-bold text-xl tracking-widest uppercase bg-rose-500/20 border-2 border-rose-500 text-rose-400 opacity-100 transform translate-y-0 z-10';
+        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-rose-500 drop-shadow-[0_0_35px_rgba(255,42,95,0.7)] z-10 leading-none';
+        streak = 0;
+        synth.playBuzzer();
+      }
+
+      streakDisplay.textContent = String(streak).padStart(2, '0');
+
+      // Update Hall of Fame Leaderboard
+      updateLeaderboardEntry(currentPlayer, formattedElapsed, absDelta);
+
+      // Reset Button Ready State
+      slamBtnText.textContent = 'AGAIN';
+      slamBtnSub.textContent = 'TOUCH TO PLAY';
+      btnHalo.classList.add('aura-pulse-anim');
+      btnHalo.style.opacity = '0.6';
+    }
+
+    function updateLeaderboardEntry(name, timeStr, diff) {
+      leaderboard.push({
+        name: name || 'CHALLENGER',
+        time: timeStr,
+        diff: diff,
+        date: 'JUST NOW'
+      });
+
+      leaderboard.sort((a, b) => a.diff - b.diff);
+      leaderboard = leaderboard.slice(0, 5);
+      try {
+        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+      } catch(e) {}
+      renderLeaderboardUI();
+    }
+
+    function renderLeaderboardUI() {
+      leaderboardList.innerHTML = '';
+      leaderboard.forEach((entry, idx) => {
+        const isChamp = idx === 0;
+        const row = document.createElement('div');
+        row.className = `flex justify-between items-center px-6 py-3.5 rounded-2xl transition-all ${
+          isChamp ? 'bg-amber-400/10 border-2 border-amber-400/40 shadow-lg shadow-amber-500/10' : 'bg-slate-900/60 border border-slate-800'
+        }`;
+        row.innerHTML = `
+          <div class="flex items-center gap-5">
+            <span class="font-digital font-black text-xl ${isChamp ? 'text-amber-400' : 'text-slate-500'}">0${idx + 1}</span>
+            <div class="text-left">
+              <span class="font-tech font-black text-xl text-white uppercase tracking-wider block">${entry.name}</span>
+              <span class="text-[11px] font-tech text-slate-500 uppercase tracking-widest">${entry.date}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-8">
+            <span class="font-digital text-slate-400 text-base">Δ ${entry.diff > 0 ? '+' : ''}${entry.diff.toFixed(3)}s</span>
+            <span class="font-digital font-black text-2xl ${isChamp ? 'text-amber-300' : 'text-cyan-400'}">${entry.time}s</span>
+          </div>
+        `;
+        leaderboardList.appendChild(row);
+      });
+    }
+
+    function blastConfetti() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 160,
+          spread: 120,
+          origin: { y: 0.65 }
+        });
+      }
+    }
+
+    if (slamButton) {
+      slamButton.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (gameState === 'IDLE' || gameState === 'REVEAL') {
+          startRun();
+        } else if (gameState === 'RUNNING') {
+          triggerSlamStop();
+        }
+      });
+    }
+
+    // Blindout Mode Toggle
+    btnToggleBlindout.addEventListener('click', () => {
+      synth.playClick(700);
+      isBlindoutEnabled = !isBlindoutEnabled;
+      if (isBlindoutEnabled) {
+        blindoutIndicator.className = 'w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse';
+        blindoutModeText.textContent = 'HIDE AT 5.0s';
+        blindoutModeText.className = 'text-sm font-tech font-extrabold text-rose-400 uppercase tracking-wider';
+      } else {
+        blindoutIndicator.className = 'w-3.5 h-3.5 rounded-full bg-emerald-400';
+        blindoutModeText.textContent = 'ALWAYS VISIBLE';
+        blindoutModeText.className = 'text-sm font-tech font-extrabold text-emerald-400 uppercase tracking-wider';
+      }
+    });
+
+    // Sound Mute Toggle
+    btnToggleSound.addEventListener('click', () => {
+      synth.muted = !synth.muted;
+      synth.playClick(600);
+      soundIcon.textContent = synth.muted ? '🔇' : '🔊';
+    });
+
+    // Clear Leaderboard
+    btnClearLeaderboard.addEventListener('click', () => {
+      synth.playClick(400);
+      leaderboard = [
+        { name: 'ROBOT MASTER', time: '10.005', diff: 0.005, date: 'TODAY' }
+      ];
+      try {
+        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+      } catch(e) {}
+      renderLeaderboardUI();
+    });
+
+    function openPlayerModal() {
+      synth.playClick(600);
+      inputPlayerName.value = currentPlayer;
+      playerModal.classList.remove('hidden');
+      inputPlayerName.focus();
+    }
+
+    function saveAndClosePlayerModal() {
+      synth.playClick(850);
+      const name = inputPlayerName.value.trim().toUpperCase() || 'CHALLENGER 1';
+      currentPlayer = name;
+      try {
+        localStorage.setItem('currentPlayer', currentPlayer);
+      } catch(e) {}
+      hudPlayerLabel.textContent = currentPlayer;
+      playerModal.classList.add('hidden');
+    }
+
+    btnSwitchChallenger.addEventListener('click', openPlayerModal);
+    btnConfirmPlayer.addEventListener('click', saveAndClosePlayerModal);
+
+    // On-screen touch key events
+    document.querySelectorAll('.virtual-key').forEach(key => {
+      key.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        synth.playClick(800);
+        if (inputPlayerName.value.length < 12) {
+          inputPlayerName.value += key.textContent.trim();
+        }
+      });
+    });
+
+    btnVirtualBackspace.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      synth.playClick(500);
+      inputPlayerName.value = inputPlayerName.value.slice(0, -1);
+    });
+
+    inputPlayerName.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        saveAndClosePlayerModal();
+      }
+    });
+
+    // Boot & Initial Render
+    renderLeaderboardUI();
+    hudPlayerLabel.textContent = currentPlayer;
+  </script>
+</body>
+</html>

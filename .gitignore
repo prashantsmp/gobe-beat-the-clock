@@ -1,0 +1,9 @@
+# User-requested ignored files
+AGENTS.md
+beat_the_clock_10_000s.html
+
+# Operating System & Editor artifacts
+.DS_Store
+*.log
+.vscode/
+.idea/
