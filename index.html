@@ -50,6 +50,19 @@
       flex-direction: column;
       justify-content: space-between;
       transform-origin: center center;
+      /* Own compositor layer so the JS scale + scanline overlay don't re-rasterize on the kiosk GPU */
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    /* Shake target: lives inside #kioskRoot so slams don't re-transform the scaled canvas */
+    #shakeLayer {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .font-digital {
@@ -123,6 +136,7 @@
 
     .aura-pulse-anim {
       animation: auraPulse 2s ease-in-out infinite;
+      will-change: transform, opacity;
     }
   </style>
 </head>
@@ -130,10 +144,11 @@
 
   <div id="kioskRoot" class="scanlines p-14">
     
+    <div id="shakeLayer">
     <!-- ================= 1. TOP STATUS HEADER ================= -->
     <header class="w-full flex justify-between items-center z-10 pt-2">
       <!-- Player Profile Card -->
-      <div class="flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl px-7 py-4 rounded-3xl border-2 border-cyan-500/30 shadow-2xl">
+      <div class="flex items-center gap-4 bg-slate-900/90 px-7 py-4 rounded-3xl border-2 border-cyan-500/30 shadow-2xl">
         <div class="w-4 h-4 rounded-full bg-cyan-400 animate-pulse"></div>
         <div class="text-left">
           <div class="text-[11px] font-tech font-bold tracking-[0.2em] text-cyan-400 uppercase">CHALLENGER</div>
@@ -149,7 +164,7 @@
       <!-- Header Controls: Blindout Toggle + Mute + Streak -->
       <div class="flex items-center gap-4">
         <!-- Blindout Mode Toggle -->
-        <button id="btnToggleBlindout" class="flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl px-5 py-4 rounded-3xl border-2 border-slate-700 hover:border-cyan-400/50 active:scale-95 transition-all shadow-2xl">
+        <button id="btnToggleBlindout" class="flex items-center gap-3 bg-slate-900/90 px-5 py-4 rounded-3xl border-2 border-slate-700 hover:border-cyan-400/50 active:scale-95 transition-all shadow-2xl">
           <div id="blindoutIndicator" class="w-3.5 h-3.5 rounded-full bg-rose-500 animate-pulse"></div>
           <div class="text-left">
             <div class="text-[10px] font-tech font-bold tracking-widest text-slate-400 uppercase">BLINDOUT MODE</div>
@@ -165,7 +180,7 @@
         </button>
 
         <!-- Streak Badge -->
-        <div class="flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl px-6 py-3.5 rounded-3xl border-2 border-amber-500/40 shadow-2xl">
+        <div class="flex items-center gap-4 bg-slate-900/90 px-6 py-3.5 rounded-3xl border-2 border-amber-500/40 shadow-2xl">
           <div class="text-right">
             <div class="text-[10px] font-tech font-bold tracking-widest text-amber-400 uppercase">STREAK</div>
             <div id="streakDisplay" class="text-3xl font-digital font-black text-amber-400 leading-none">00</div>
@@ -218,12 +233,11 @@
             stroke-linecap="round"
             stroke-dasharray="1507.96" 
             stroke-dashoffset="1507.96" 
-            class="transition-[stroke-dashoffset] duration-75"
           />
         </svg>
 
         <!-- Inner Core Circular Chassis -->
-        <div class="relative w-[440px] h-[440px] rounded-full bg-slate-950/95 border-2 border-slate-800 flex flex-col items-center justify-center p-6 backdrop-blur-2xl shadow-inner overflow-hidden">
+        <div class="relative w-[440px] h-[440px] rounded-full bg-slate-950/95 border-2 border-slate-800 flex flex-col items-center justify-center p-6 shadow-inner overflow-hidden">
           
           <!-- Sensory Blindout Glitch Screen Overlay -->
           <div id="blindoutGlitchScreen" class="absolute inset-0 bg-[#060810]/98 flex flex-col items-center justify-center p-8 opacity-0 pointer-events-none transition-opacity duration-150 z-20">
@@ -279,7 +293,7 @@
 
     <!-- ================= 4. LOCAL HALL OF FAME FOOTER ================= -->
     <footer class="w-full z-10 pb-2">
-      <div class="w-full bg-slate-900/80 backdrop-blur-xl rounded-3xl border-2 border-slate-800 p-6 shadow-2xl">
+      <div class="w-full bg-slate-900/90 rounded-3xl border-2 border-slate-800 p-6 shadow-2xl">
         <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
           <div class="flex items-center gap-3">
             <span class="text-2xl">🏆</span>
@@ -298,9 +312,10 @@
         </div>
       </div>
     </footer>
+    </div>
 
     <!-- ================= 5. ON-SCREEN TOUCH REGISTRATION MODAL ================= -->
-    <div id="playerModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl flex items-center justify-center z-50 p-8 hidden">
+    <div id="playerModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-8 hidden">
       <div class="w-[820px] bg-slate-900 border-2 border-cyan-500/50 rounded-3xl p-10 flex flex-col items-center shadow-[0_0_80px_rgba(0,243,255,0.25)]">
         
         <div class="w-20 h-20 rounded-3xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center text-4xl mb-4 shadow-lg shadow-cyan-500/20">
@@ -318,47 +333,24 @@
             maxlength="12" 
             placeholder="PLAYER NAME" 
             autocomplete="off"
+            inputmode="none"
             class="w-full bg-slate-950 border-2 border-cyan-500/60 rounded-2xl px-6 py-5 text-4xl font-digital text-center text-cyan-300 uppercase tracking-widest focus:outline-none focus:border-cyan-300 shadow-inner"
           />
         </div>
 
         <!-- On-Screen Virtual Touch Keyboard -->
-        <div class="grid grid-cols-6 gap-3 w-full mt-6">
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">A</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">B</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">C</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">D</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">E</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">F</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">G</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">H</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">I</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">J</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">K</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">L</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">M</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">N</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">O</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">P</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">R</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">S</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">T</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">U</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">V</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">W</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">X</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">Z</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">1</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">2</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">3</button>
-          <button class="virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">4</button>
-          <button id="btnVirtualBackspace" class="col-span-2 bg-rose-950/70 hover:bg-rose-900 border border-rose-600/40 text-rose-300 py-3.5 rounded-2xl font-tech font-bold text-xl active:scale-95 transition-all">
+        <div id="virtualKeyboard" class="grid grid-cols-6 gap-3 w-full mt-6">
+          <!-- A-Z and 0-9 keys are generated by JS (buildVirtualKeyboard) -->
+          <button id="btnVirtualSpace" class="col-span-3 bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all">
+            SPACE
+          </button>
+          <button id="btnVirtualBackspace" class="col-span-3 bg-rose-950/70 hover:bg-rose-900 border border-rose-600/40 text-rose-300 py-3.5 rounded-2xl font-tech font-bold text-xl active:scale-95 transition-all">
             ⌫ BACK
           </button>
         </div>
 
         <!-- Confirm and Play Button -->
-        <button id="btnConfirmPlayer" class="w-full mt-8 bg-gradient-to-r from-cyan-400 via-cyan-500 to-blue-600 hover:brightness-110 text-slate-950 font-black font-tech text-3xl py-6 rounded-3xl uppercase tracking-widest shadow-xl shadow-cyan-500/30 active:scale-98 transition-all">
+        <button id="btnConfirmPlayer" class="w-full mt-8 bg-gradient-to-r from-cyan-400 via-cyan-500 to-blue-600 hover:brightness-110 text-slate-950 font-black font-tech text-3xl py-6 rounded-3xl uppercase tracking-widest shadow-xl shadow-cyan-500/30 active:scale-[0.98] transition-all">
           LOCK IN CHALLENGER ➔
         </button>
       </div>
@@ -527,6 +519,12 @@
        GAME CONTROLLER & KIOSK LOGIC
     ---------------------------------------------------- */
     const CIRCUMFERENCE = 1507.96; // 2 * PI * 240
+    const TARGET_MS = 10000;
+    const BLINDOUT_MS = 5000;
+    const AUTO_FAIL_MS = 14500;
+    const MAX_NAME_LENGTH = 12;
+    const LEADERBOARD_SIZE = 5;
+    const RESET_CONFIRM_WINDOW_MS = 3000;
     let gameState = 'IDLE'; // 'IDLE' | 'RUNNING' | 'FREEZE' | 'REVEAL'
     let isBlindoutEnabled = true;
     let streak = 0;
@@ -536,9 +534,35 @@
     let lastSecondEmitted = 0;
     let currentPlayer = 'CHALLENGER 1';
     try {
-      const savedPlayer = localStorage.getItem('currentPlayer');
+      const savedPlayer = sanitizeName(localStorage.getItem('currentPlayer'));
       if (savedPlayer) currentPlayer = savedPlayer;
     } catch(e) {}
+
+    // Keep names to the on-screen keyboard's character set so stored values stay safe and short
+    function sanitizeName(raw) {
+      if (typeof raw !== 'string') return '';
+      return raw.toUpperCase().replace(/[^A-Z0-9 -]/g, '').trim().slice(0, MAX_NAME_LENGTH);
+    }
+
+    // All timing is resolved to whole milliseconds once, so display, offset and tier always agree
+    function toWholeMs(elapsedMs) {
+      return Math.max(0, Math.floor(elapsedMs));
+    }
+
+    function formatMs(totalMs) {
+      const s = Math.floor(totalMs / 1000);
+      const ms = totalMs % 1000;
+      return `${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+    }
+
+    function formatSignedOffset(deltaMs) {
+      const sign = deltaMs > 0 ? '+' : deltaMs < 0 ? '-' : '±';
+      return `${sign}${(Math.abs(deltaMs) / 1000).toFixed(3)}s`;
+    }
+
+    function isRunActive() {
+      return gameState === 'RUNNING' || gameState === 'FREEZE';
+    }
 
     // DOM Elements
     const hudPlayerLabel = document.getElementById('hudPlayerLabel');
@@ -572,21 +596,50 @@
     const btnVirtualBackspace = document.getElementById('btnVirtualBackspace');
 
     // Leaderboard Data Cache
-    const DEFAULT_LEADERBOARD = [
-      { name: 'VALKYRIE', time: '10.002', diff: 0.002, date: 'TODAY' },
-      { name: 'KAIZEN', time: '09.989', diff: 0.011, date: 'TODAY' },
-      { name: 'PHANTOM', time: '10.024', diff: 0.024, date: 'TODAY' },
-      { name: 'CYBER-X', time: '09.965', diff: 0.035, date: 'YESTERDAY' },
-      { name: 'NOVA', time: '10.052', diff: 0.052, date: 'YESTERDAY' }
-    ];
-    let leaderboard = DEFAULT_LEADERBOARD;
-    try {
-      const stored = localStorage.getItem('leaderboard');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) leaderboard = parsed;
+    // diff is the signed offset in seconds (negative = early, positive = late)
+    const DEFAULT_LEADERBOARD = Object.freeze([
+      { name: 'VALKYRIE', time: '10.002', diff: 0.002, date: 'PRESET' },
+      { name: 'KAIZEN', time: '09.989', diff: -0.011, date: 'PRESET' },
+      { name: 'PHANTOM', time: '10.024', diff: 0.024, date: 'PRESET' },
+      { name: 'CYBER-X', time: '09.965', diff: -0.035, date: 'PRESET' },
+      { name: 'NOVA', time: '10.052', diff: 0.052, date: 'PRESET' }
+    ]);
+
+    // Rebuilds an entry from stored data, deriving the signed diff from the time string
+    // (older saves stored |diff|). Returns null for anything malformed.
+    function normalizeEntry(raw) {
+      if (!raw || typeof raw !== 'object' || typeof raw.time !== 'string') return null;
+      if (!/^\d{2}\.\d{3}$/.test(raw.time)) return null;
+      const name = sanitizeName(raw.name) || 'CHALLENGER';
+      const timeMs = Math.round(parseFloat(raw.time) * 1000);
+      const date = typeof raw.date === 'string' ? raw.date.slice(0, 40) : '';
+      return { name, time: raw.time, diff: (timeMs - TARGET_MS) / 1000, date };
+    }
+
+    function rankLeaderboard(entries) {
+      return [...entries]
+        .sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff))
+        .slice(0, LEADERBOARD_SIZE);
+    }
+
+    function loadLeaderboard() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem('leaderboard'));
+        if (!Array.isArray(parsed)) return [...DEFAULT_LEADERBOARD];
+        // An empty array is a deliberate reset, so keep it empty
+        return rankLeaderboard(parsed.map(normalizeEntry).filter(Boolean));
+      } catch(e) {
+        return [...DEFAULT_LEADERBOARD];
       }
-    } catch(e) {}
+    }
+
+    function saveLeaderboard() {
+      try {
+        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+      } catch(e) {}
+    }
+
+    let leaderboard = loadLeaderboard();
 
     function applyKioskScaling() {
       const root = document.getElementById('kioskRoot');
@@ -603,21 +656,9 @@
     window.addEventListener('resize', applyKioskScaling);
     applyKioskScaling();
 
-    function formatTime(seconds) {
-      const s = Math.floor(seconds);
-      const ms = Math.floor((seconds % 1) * 1000);
-      return `${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
-    }
-
-    function loop(now) {
-      if (gameState !== 'RUNNING') return;
-
-      const elapsed = (now - startTime) / 1000;
-
-      // Update Circular Progress Stroke
+    function updateDial(elapsed) {
       const progressRatio = Math.min(elapsed / 10.0, 1.0);
-      const dashOffset = CIRCUMFERENCE - (CIRCUMFERENCE * progressRatio);
-      dialProgressRing.style.strokeDashoffset = dashOffset;
+      dialProgressRing.style.strokeDashoffset = CIRCUMFERENCE - (CIRCUMFERENCE * progressRatio);
 
       // Dynamic color shift along the countdown arc
       if (elapsed > 8.0) {
@@ -630,42 +671,54 @@
         dialProgressRing.style.stroke = '#00f3ff';
         dialGlow.style.backgroundColor = 'rgba(0, 243, 255, 0.15)';
       }
+    }
+
+    function loop(now) {
+      if (gameState !== 'RUNNING') return;
+
+      const elapsedMs = toWholeMs(now - startTime);
+      const isBlind = isBlindoutEnabled && elapsedMs >= BLINDOUT_MS;
 
       // Audio tick every whole second under 5s
-      const wholeSec = Math.floor(elapsed);
+      const wholeSec = Math.floor(elapsedMs / 1000);
       if (wholeSec !== lastSecondEmitted && wholeSec > 0 && wholeSec < 5) {
         synth.playTick();
         lastSecondEmitted = wholeSec;
       }
 
-      // Blindout at 5.000s if enabled
-      if (isBlindoutEnabled && elapsed >= 5.0 && blindoutGlitchScreen.style.opacity !== '1') {
-        blindoutGlitchScreen.style.opacity = '1';
-        synth.playGlitch();
-      }
-
-      // Digital Numbers Rendering
-      if (!isBlindoutEnabled || elapsed < 5.0) {
-        timerDigits.textContent = formatTime(elapsed);
+      if (isBlind) {
+        // Blindout at 5.000s: hide digits AND the progress ring, which would otherwise reveal 10s
+        if (blindoutGlitchScreen.style.opacity !== '1') {
+          blindoutGlitchScreen.style.opacity = '1';
+          dialProgressRing.style.opacity = '0';
+          dialGlow.style.backgroundColor = 'rgba(100, 116, 139, 0.12)';
+          synth.playGlitch();
+        }
+      } else {
+        updateDial(elapsedMs / 1000);
+        timerDigits.textContent = formatMs(elapsedMs);
       }
 
       // Auto Fail Cutoff after 14.5 seconds
-      if (elapsed >= 14.5) {
-        triggerSlamStop();
+      if (elapsedMs >= AUTO_FAIL_MS) {
+        triggerSlamStop(now);
         return;
       }
 
       animFrame = requestAnimationFrame(loop);
     }
 
-    function startRun() {
+    // startedAt is the touch event's timestamp (same clock as performance.now()) to avoid handler latency
+    function startRun(startedAt) {
       synth.init();
       gameState = 'RUNNING';
-      startTime = performance.now();
+      startTime = startedAt;
       lastSecondEmitted = 0;
+      setControlsLocked(true);
 
       // Reset Visual HUD
       blindoutGlitchScreen.style.opacity = '0';
+      dialProgressRing.style.opacity = '1';
       ratingBadge.style.opacity = '0';
       ratingBadge.classList.add('translate-y-3');
       deltaReadout.style.opacity = '0';
@@ -683,18 +736,21 @@
       animFrame = requestAnimationFrame(loop);
     }
 
-    function triggerSlamStop() {
+    function triggerSlamStop(stoppedAt) {
       if (gameState !== 'RUNNING') return;
       gameState = 'FREEZE';
-      stopTime = performance.now();
+      stopTime = stoppedAt;
       cancelAnimationFrame(animFrame);
 
       synth.playSlam();
       synth.playSuspenseRiser();
 
       // Tactile visual feedback
-      document.body.classList.add('screen-shake');
-      setTimeout(() => document.body.classList.remove('screen-shake'), 320);
+      const shakeLayer = document.getElementById('shakeLayer');
+      if (shakeLayer) {
+        shakeLayer.classList.add('screen-shake');
+        setTimeout(() => shakeLayer.classList.remove('screen-shake'), 320);
+      }
 
       slamButton.classList.add('slam-depressed');
       setTimeout(() => slamButton.classList.remove('slam-depressed'), 140);
@@ -707,102 +763,145 @@
       setTimeout(evaluateResult, 650);
     }
 
+    const BADGE_BASE = 'mt-4 px-8 py-2.5 rounded-full font-tech tracking-widest uppercase opacity-100 transform translate-y-0 z-10';
+    const DIGITS_BASE = 'text-[92px] font-digital font-black tracking-tight z-10 leading-none';
+
+    // Precision tiers, checked in order against |delta| in whole milliseconds
+    const PRECISION_TIERS = [
+      {
+        maxAbsMs: 0,
+        label: '⚡ GOD TIER: EXACT 10.000s! ⚡',
+        badge: 'font-black text-2xl bg-amber-400 text-slate-950 shadow-[0_0_50px_rgba(255,184,0,0.9)]',
+        digits: 'text-amber-300 drop-shadow-[0_0_60px_rgba(255,184,0,1)]',
+        isWin: true,
+        celebrate() { synth.playVictoryChord(); blastConfetti(); }
+      },
+      {
+        maxAbsMs: 50,
+        label: '🎯 SNIPER PRECISION!',
+        badge: 'font-black text-2xl bg-cyan-400 text-slate-950 shadow-[0_0_35px_rgba(0,243,255,0.8)]',
+        digits: 'text-cyan-200 drop-shadow-[0_0_40px_rgba(0,243,255,0.8)]',
+        isWin: true,
+        celebrate() { synth.playVictoryChord(); }
+      },
+      {
+        maxAbsMs: 200,
+        label: '⚡ CLOSE CALL!',
+        badge: 'font-bold text-xl bg-amber-500/20 border-2 border-amber-400 text-amber-300',
+        digits: 'text-amber-400 drop-shadow-[0_0_30px_rgba(255,184,0,0.6)]',
+        isWin: false,
+        celebrate() { synth.playClick(440); }
+      },
+      {
+        maxAbsMs: Infinity,
+        label: '💀 BUST! TRY AGAIN',
+        badge: 'font-bold text-xl bg-rose-500/20 border-2 border-rose-500 text-rose-400',
+        digits: 'text-rose-500 drop-shadow-[0_0_35px_rgba(255,42,95,0.7)]',
+        isWin: false,
+        celebrate() { synth.playBuzzer(); }
+      }
+    ];
+
     function evaluateResult() {
       gameState = 'REVEAL';
-      const elapsed = (stopTime - startTime) / 1000;
-      const rawDelta = elapsed - 10.000;
-      const absDelta = Math.abs(rawDelta);
-      const formattedElapsed = formatTime(elapsed);
+      const elapsedMs = toWholeMs(stopTime - startTime);
+      const deltaMs = elapsedMs - TARGET_MS;
+      const formattedElapsed = formatMs(elapsedMs);
+      const tier = PRECISION_TIERS.find(t => Math.abs(deltaMs) <= t.maxAbsMs);
 
       blindoutGlitchScreen.style.opacity = '0';
+      dialProgressRing.style.opacity = '1';
+      updateDial(elapsedMs / 1000);
       timerDigits.textContent = formattedElapsed;
 
-      deltaReadout.textContent = `OFFSET: ${rawDelta >= 0 ? '+' : ''}${rawDelta.toFixed(3)}s`;
+      deltaReadout.textContent = `OFFSET: ${formatSignedOffset(deltaMs)}`;
       deltaReadout.style.opacity = '1';
 
-      // Precision Tier Classification
-      if (absDelta < 0.001) {
-        // EXACT 10.000s - GOD TIER
-        ratingBadge.textContent = '⚡ GOD TIER: EXACT 10.000s! ⚡';
-        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-black text-2xl tracking-widest uppercase bg-amber-400 text-slate-950 shadow-[0_0_50px_rgba(255,184,0,0.9)] opacity-100 transform translate-y-0 z-10';
-        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-amber-300 drop-shadow-[0_0_60px_rgba(255,184,0,1)] z-10 leading-none';
-        streak++;
-        synth.playVictoryChord();
-        blastConfetti();
-      } else if (absDelta <= 0.050) {
-        // SNIPER
-        ratingBadge.textContent = '🎯 SNIPER PRECISION!';
-        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-black text-2xl tracking-widest uppercase bg-cyan-400 text-slate-950 shadow-[0_0_35px_rgba(0,243,255,0.8)] opacity-100 transform translate-y-0 z-10';
-        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-cyan-200 drop-shadow-[0_0_40px_rgba(0,243,255,0.8)] z-10 leading-none';
-        streak++;
-        synth.playVictoryChord();
-      } else if (absDelta <= 0.200) {
-        // CLOSE CALL
-        ratingBadge.textContent = '⚡ CLOSE CALL!';
-        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-bold text-xl tracking-widest uppercase bg-amber-500/20 border-2 border-amber-400 text-amber-300 opacity-100 transform translate-y-0 z-10';
-        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-amber-400 drop-shadow-[0_0_30px_rgba(255,184,0,0.6)] z-10 leading-none';
-        streak = 0;
-        synth.playClick(440);
-      } else {
-        // BUST
-        ratingBadge.textContent = '💀 BUST! TRY AGAIN';
-        ratingBadge.className = 'mt-4 px-8 py-2.5 rounded-full font-tech font-bold text-xl tracking-widest uppercase bg-rose-500/20 border-2 border-rose-500 text-rose-400 opacity-100 transform translate-y-0 z-10';
-        timerDigits.className = 'text-[92px] font-digital font-black tracking-tight text-rose-500 drop-shadow-[0_0_35px_rgba(255,42,95,0.7)] z-10 leading-none';
-        streak = 0;
-        synth.playBuzzer();
-      }
+      ratingBadge.textContent = tier.label;
+      ratingBadge.className = `${BADGE_BASE} ${tier.badge}`;
+      timerDigits.className = `${DIGITS_BASE} ${tier.digits}`;
+      streak = tier.isWin ? streak + 1 : 0;
+      tier.celebrate();
 
       streakDisplay.textContent = String(streak).padStart(2, '0');
 
       // Update Hall of Fame Leaderboard
-      updateLeaderboardEntry(currentPlayer, formattedElapsed, absDelta);
+      updateLeaderboardEntry(currentPlayer, formattedElapsed, deltaMs / 1000);
 
       // Reset Button Ready State
+      setControlsLocked(false);
       slamBtnText.textContent = 'AGAIN';
       slamBtnSub.textContent = 'TOUCH TO PLAY';
       btnHalo.classList.add('aura-pulse-anim');
       btnHalo.style.opacity = '0.6';
     }
 
-    function updateLeaderboardEntry(name, timeStr, diff) {
-      leaderboard.push({
+    function formatEntryDate(date) {
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = date.toLocaleString('en', { month: 'short' }).toUpperCase();
+      const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      return `${day} ${month} ${time}`;
+    }
+
+    function updateLeaderboardEntry(name, timeStr, signedDiff) {
+      const entry = {
         name: name || 'CHALLENGER',
         time: timeStr,
-        diff: diff,
-        date: 'JUST NOW'
-      });
-
-      leaderboard.sort((a, b) => a.diff - b.diff);
-      leaderboard = leaderboard.slice(0, 5);
-      try {
-        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
-      } catch(e) {}
+        diff: signedDiff,
+        date: formatEntryDate(new Date())
+      };
+      leaderboard = rankLeaderboard([...leaderboard, entry]);
+      saveLeaderboard();
       renderLeaderboardUI();
     }
 
+    function createTextSpan(className, text) {
+      const span = document.createElement('span');
+      span.className = className;
+      span.textContent = text;
+      return span;
+    }
+
+    // Built with textContent (never innerHTML) because names come from user input and localStorage
+    function createLeaderboardRow(entry, idx) {
+      const isChamp = idx === 0;
+      const row = document.createElement('div');
+      row.className = `flex justify-between items-center px-6 py-3.5 rounded-2xl transition-all ${
+        isChamp ? 'bg-amber-400/10 border-2 border-amber-400/40 shadow-lg shadow-amber-500/10' : 'bg-slate-900/60 border border-slate-800'
+      }`;
+
+      const left = document.createElement('div');
+      left.className = 'flex items-center gap-5';
+      const identity = document.createElement('div');
+      identity.className = 'text-left';
+      identity.append(
+        createTextSpan('font-tech font-black text-xl text-white uppercase tracking-wider block', entry.name),
+        createTextSpan('text-[11px] font-tech text-slate-500 uppercase tracking-widest', entry.date)
+      );
+      left.append(
+        createTextSpan(`font-digital font-black text-xl ${isChamp ? 'text-amber-400' : 'text-slate-500'}`, `0${idx + 1}`),
+        identity
+      );
+
+      const right = document.createElement('div');
+      right.className = 'flex items-center gap-8';
+      right.append(
+        createTextSpan('font-digital text-slate-400 text-base', `Δ ${formatSignedOffset(Math.round(entry.diff * 1000))}`),
+        createTextSpan(`font-digital font-black text-2xl ${isChamp ? 'text-amber-300' : 'text-cyan-400'}`, `${entry.time}s`)
+      );
+
+      row.append(left, right);
+      return row;
+    }
+
     function renderLeaderboardUI() {
-      leaderboardList.innerHTML = '';
-      leaderboard.forEach((entry, idx) => {
-        const isChamp = idx === 0;
-        const row = document.createElement('div');
-        row.className = `flex justify-between items-center px-6 py-3.5 rounded-2xl transition-all ${
-          isChamp ? 'bg-amber-400/10 border-2 border-amber-400/40 shadow-lg shadow-amber-500/10' : 'bg-slate-900/60 border border-slate-800'
-        }`;
-        row.innerHTML = `
-          <div class="flex items-center gap-5">
-            <span class="font-digital font-black text-xl ${isChamp ? 'text-amber-400' : 'text-slate-500'}">0${idx + 1}</span>
-            <div class="text-left">
-              <span class="font-tech font-black text-xl text-white uppercase tracking-wider block">${entry.name}</span>
-              <span class="text-[11px] font-tech text-slate-500 uppercase tracking-widest">${entry.date}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-8">
-            <span class="font-digital text-slate-400 text-base">Δ ${entry.diff > 0 ? '+' : ''}${entry.diff.toFixed(3)}s</span>
-            <span class="font-digital font-black text-2xl ${isChamp ? 'text-amber-300' : 'text-cyan-400'}">${entry.time}s</span>
-          </div>
-        `;
-        leaderboardList.appendChild(row);
-      });
+      if (leaderboard.length === 0) {
+        leaderboardList.replaceChildren(
+          createTextSpan('block text-center py-6 font-tech text-slate-500 uppercase tracking-widest', 'No records yet — be the first!')
+        );
+        return;
+      }
+      leaderboardList.replaceChildren(...leaderboard.map(createLeaderboardRow));
     }
 
     function blastConfetti() {
@@ -815,19 +914,37 @@
       }
     }
 
-    if (slamButton) {
-      slamButton.addEventListener('pointerdown', (e) => {
+    // Touch-first binding: pointerdown avoids the 300ms click delay on the kiosk
+    function onTap(el, handler) {
+      if (!el) return;
+      el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (gameState === 'IDLE' || gameState === 'REVEAL') {
-          startRun();
-        } else if (gameState === 'RUNNING') {
-          triggerSlamStop();
-        }
+        handler(e);
       });
     }
 
+    // Header and reset controls must not change rules or open the modal mid-run
+    const lockableControls = [btnSwitchChallenger, btnToggleBlindout, btnClearLeaderboard];
+    function setControlsLocked(isLocked) {
+      lockableControls.forEach(el => {
+        if (!el) return;
+        el.classList.toggle('opacity-40', isLocked);
+        el.setAttribute('aria-disabled', String(isLocked));
+      });
+    }
+
+    onTap(slamButton, (e) => {
+      const tappedAt = e.timeStamp || performance.now();
+      if (gameState === 'IDLE' || gameState === 'REVEAL') {
+        startRun(tappedAt);
+      } else if (gameState === 'RUNNING') {
+        triggerSlamStop(tappedAt);
+      }
+    });
+
     // Blindout Mode Toggle
-    btnToggleBlindout.addEventListener('click', () => {
+    onTap(btnToggleBlindout, () => {
+      if (isRunActive()) return;
       synth.playClick(700);
       isBlindoutEnabled = !isBlindoutEnabled;
       if (isBlindoutEnabled) {
@@ -842,35 +959,49 @@
     });
 
     // Sound Mute Toggle
-    btnToggleSound.addEventListener('click', () => {
+    onTap(btnToggleSound, () => {
       synth.muted = !synth.muted;
       synth.playClick(600);
       soundIcon.textContent = synth.muted ? '🔇' : '🔊';
     });
 
-    // Clear Leaderboard
-    btnClearLeaderboard.addEventListener('click', () => {
-      synth.playClick(400);
-      leaderboard = [
-        { name: 'ROBOT MASTER', time: '10.005', diff: 0.005, date: 'TODAY' }
-      ];
-      try {
-        localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
-      } catch(e) {}
+    // Clear Leaderboard: first tap arms, second tap within the window confirms
+    const resetLabel = btnClearLeaderboard ? btnClearLeaderboard.textContent.trim() : '';
+    let resetArmedTimer = null;
+
+    function disarmReset() {
+      clearTimeout(resetArmedTimer);
+      resetArmedTimer = null;
+      btnClearLeaderboard.textContent = resetLabel;
+      btnClearLeaderboard.classList.remove('text-rose-400', 'border-rose-500/30');
+    }
+
+    onTap(btnClearLeaderboard, () => {
+      if (isRunActive()) return;
+      if (!resetArmedTimer) {
+        synth.playClick(400);
+        btnClearLeaderboard.textContent = 'TAP AGAIN TO CONFIRM';
+        btnClearLeaderboard.classList.add('text-rose-400', 'border-rose-500/30');
+        resetArmedTimer = setTimeout(disarmReset, RESET_CONFIRM_WINDOW_MS);
+        return;
+      }
+      disarmReset();
+      synth.playBuzzer();
+      leaderboard = [];
+      saveLeaderboard();
       renderLeaderboardUI();
     });
 
     function openPlayerModal() {
+      if (isRunActive()) return;
       synth.playClick(600);
       inputPlayerName.value = currentPlayer;
       playerModal.classList.remove('hidden');
-      inputPlayerName.focus();
     }
 
     function saveAndClosePlayerModal() {
       synth.playClick(850);
-      const name = inputPlayerName.value.trim().toUpperCase() || 'CHALLENGER 1';
-      currentPlayer = name;
+      currentPlayer = sanitizeName(inputPlayerName.value) || 'CHALLENGER 1';
       try {
         localStorage.setItem('currentPlayer', currentPlayer);
       } catch(e) {}
@@ -878,22 +1009,41 @@
       playerModal.classList.add('hidden');
     }
 
-    btnSwitchChallenger.addEventListener('click', openPlayerModal);
-    btnConfirmPlayer.addEventListener('click', saveAndClosePlayerModal);
+    onTap(btnSwitchChallenger, openPlayerModal);
+    onTap(btnConfirmPlayer, saveAndClosePlayerModal);
 
-    // On-screen touch key events
-    document.querySelectorAll('.virtual-key').forEach(key => {
-      key.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        synth.playClick(800);
-        if (inputPlayerName.value.length < 12) {
-          inputPlayerName.value += key.textContent.trim();
-        }
+    function appendToName(char) {
+      if (inputPlayerName.value.length < MAX_NAME_LENGTH) {
+        inputPlayerName.value += char;
+      }
+    }
+
+    // Full A-Z + 0-9 grid, generated so no key can go missing
+    function buildVirtualKeyboard() {
+      const keyboard = document.getElementById('virtualKeyboard');
+      const spaceKey = document.getElementById('btnVirtualSpace');
+      if (!keyboard) return;
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+      chars.forEach(char => {
+        const key = document.createElement('button');
+        key.className = 'virtual-key bg-slate-800 hover:bg-slate-700 py-3.5 rounded-2xl font-tech font-bold text-xl text-white active:scale-95 transition-all';
+        key.textContent = char;
+        onTap(key, () => {
+          synth.playClick(800);
+          appendToName(char);
+        });
+        keyboard.insertBefore(key, spaceKey);
       });
+    }
+
+    buildVirtualKeyboard();
+
+    onTap(document.getElementById('btnVirtualSpace'), () => {
+      synth.playClick(700);
+      if (inputPlayerName.value && !inputPlayerName.value.endsWith(' ')) appendToName(' ');
     });
 
-    btnVirtualBackspace.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
+    onTap(btnVirtualBackspace, () => {
       synth.playClick(500);
       inputPlayerName.value = inputPlayerName.value.slice(0, -1);
     });
